@@ -1,0 +1,1817 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anki 視覺語境背單字工作台 — 桌面旗艦版</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-app: #f1f5f9;
+      --bg-sidebar: #ffffff;
+      --bg-card: #ffffff;
+      --bg-subtle: #f8fafc;
+      --text-primary: #0f172a;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --accent: #4f46e5;
+    }
+
+    html.dark {
+      --bg-app: #090d16;
+      --bg-sidebar: #0f172a;
+      --bg-card: #131c31;
+      --bg-subtle: #1a253d;
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --border-color: #26334d;
+      --accent: #6366f1;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-app);
+      color: var(--text-primary);
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Custom subtle scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.35);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(100, 116, 139, 0.55);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade {
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    /* Sanitized Anki rich HTML inside cards */
+    .anki-rich-html img {
+      max-width: 100%;
+      max-height: 220px;
+      border-radius: 12px;
+      margin: 8px auto;
+      display: block;
+      object-fit: contain;
+    }
+    .anki-rich-html ruby rt {
+      font-size: 0.7em;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col lg:flex-row overflow-x-hidden">
+
+  <!-- Full-Screen Drag & Drop Import Overlay -->
+  <div id="drag-drop-overlay" class="hidden fixed inset-0 z-50 bg-indigo-950/80 backdrop-blur-sm flex items-center justify-center p-6 pointer-events-none">
+    <div class="max-w-lg w-full rounded-3xl border-2 border-dashed border-indigo-400 bg-slate-900/90 p-10 text-center text-white shadow-2xl">
+      <div class="text-5xl mb-4">📦</div>
+      <h2 class="text-2xl font-extrabold mb-2">放開滑鼠以匯入 Anki 牌組</h2>
+      <p class="text-sm text-indigo-200">支援新版 <code class="px-1.5 py-0.5 rounded bg-indigo-500/30">.apkg</code>（含內嵌圖片與音訊）、<code class="px-1.5 py-0.5 rounded bg-indigo-500/30">.csv</code> 與 <code class="px-1.5 py-0.5 rounded bg-indigo-500/30">.txt</code> 檔案</p>
+    </div>
+  </div>
+
+  <!-- Hidden File Input (No restrictive accept attribute so mobile & desktop pickers never gray out .apkg) -->
+  <input id="anki-file-input" type="file" class="hidden" onchange="handleFileInputChange(event)" />
+
+  <!-- ===================================================================== -->
+  <!-- LEFT SIDEBAR: DECK TREE, IMPORT, DOCKED WINDOW SYNC & STORAGE MANAGER -->
+  <!-- ===================================================================== -->
+  <aside id="desktop-sidebar" class="w-full lg:w-[290px] shrink-0 border-b lg:border-b-0 lg:border-r flex flex-col transition-all duration-200 z-20"
+    style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+
+    <!-- Top Brand Bar -->
+    <div class="px-4 py-3.5 border-b flex items-center justify-between gap-2" style="border-color: var(--border-color);">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white flex items-center justify-center font-black text-lg shadow-md shrink-0">
+          A
+        </div>
+        <div class="min-w-0">
+          <div class="font-extrabold text-sm tracking-tight truncate">Anki 視覺語境工作台</div>
+          <div class="text-[11px] font-medium truncate" style="color: var(--text-muted);">真實 X 搜尋 × 實景聯想</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <button onclick="toggleTheme()" title="切換深色 / 淺色主題"
+          class="p-2 rounded-xl border hover:border-indigo-500 transition cursor-pointer text-sm"
+          style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+          <span id="theme-toggle-icon">🌙</span>
+        </button>
+        <button onclick="toggleSidebar()" title="收合 / 展開側邊欄"
+          class="hidden lg:inline-flex p-2 rounded-xl border hover:border-indigo-500 transition cursor-pointer text-xs font-bold"
+          style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-secondary);">
+          ◀
+        </button>
+      </div>
+    </div>
+
+    <!-- Account Login & Cloud Sync Status Card -->
+    <div class="px-3.5 pt-3">
+      <div class="p-3 rounded-2xl border space-y-2" style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <div id="sidebar-user-avatar" class="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0">
+              👤
+            </div>
+            <div class="min-w-0">
+              <div id="sidebar-user-name" class="text-xs font-extrabold truncate">雲端訪客工作區</div>
+              <div id="sidebar-sync-status" class="text-[10px] font-semibold text-emerald-500 truncate">⏳ 正在連線雲端...</div>
+            </div>
+          </div>
+          <button id="sidebar-auth-action-btn" onclick="openAccountAuthModal()"
+            class="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shrink-0 transition cursor-pointer">
+            登入帳號
+          </button>
+        </div>
+        <div class="flex items-center justify-between gap-1.5 pt-1.5 border-t text-[10px]" style="border-color: var(--border-color); color: var(--text-muted);">
+          <span class="shrink-0">帳號 ID:</span>
+          <span id="sidebar-full-uid" class="font-mono-code truncate select-all">連線中...</span>
+          <button onclick="copyCurrentUserId()" title="複製完整帳號 ID"
+            class="px-1.5 py-0.5 rounded border hover:border-indigo-500 shrink-0 cursor-pointer"
+            style="background-color: var(--bg-card); border-color: var(--border-color);">
+            複製
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scrollable Sidebar Content -->
+    <div class="p-3.5 flex-1 flex flex-col gap-3.5 overflow-y-auto">
+
+      <!-- 1. Import .apkg / .csv Dropzone -->
+      <div onclick="document.getElementById('anki-file-input').click()"
+        class="group rounded-2xl border-2 border-dashed p-3.5 text-center cursor-pointer hover:border-indigo-500 transition"
+        style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+        <div class="flex items-center justify-center gap-2">
+          <span class="text-xl group-hover:scale-110 transition-transform">📥</span>
+          <span class="text-xs font-extrabold text-indigo-500">匯入 Anki 牌組 (.apkg / .csv)</span>
+        </div>
+        <p class="text-[11px] mt-1 mb-0" style="color: var(--text-muted);">
+          點擊選檔或將檔案直接拖曳至視窗
+        </p>
+        <div id="import-progress-box" class="hidden mt-2 text-left">
+          <div class="flex items-center justify-between text-[11px] font-semibold text-indigo-500 mb-1">
+            <span id="import-progress-label">正在解析牌組...</span>
+            <span id="import-progress-pct">0%</span>
+          </div>
+          <div class="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div id="import-progress-bar" class="h-full bg-indigo-600 transition-all duration-150" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Workspace Mode & Queue Switcher -->
+      <div class="space-y-2">
+        <div class="grid grid-cols-2 gap-1 p-1 rounded-xl border" style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+          <button id="mode-btn-study" onclick="switchWorkspaceMode('study')"
+            class="py-1.5 px-2 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow-xs transition cursor-pointer">
+            🎯 背單字模式
+          </button>
+          <button id="mode-btn-table" onclick="switchWorkspaceMode('table')"
+            class="py-1.5 px-2 rounded-lg text-xs font-semibold transition cursor-pointer" style="color: var(--text-secondary);">
+            📋 牌組總覽
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-1 p-1 rounded-xl border" style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+          <button id="qmode-due" onclick="setStudyQueueMode('due')"
+            class="py-1.5 px-2 rounded-lg text-[11px] font-bold bg-emerald-600 text-white transition cursor-pointer">
+            ⏳ 待複習 (<span id="sidebar-due-count">0</span>)
+          </button>
+          <button id="qmode-all" onclick="setStudyQueueMode('all')"
+            class="py-1.5 px-2 rounded-lg text-[11px] font-semibold transition cursor-pointer" style="color: var(--text-secondary);">
+            ♾️ 自由全覽 (<span id="sidebar-all-count">0</span>)
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. Hierarchical Deck & Sub-Deck Tree -->
+      <div class="flex-1 min-h-[130px] flex flex-col">
+        <div class="flex items-center justify-between px-1 mb-1.5">
+          <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">
+            牌組階層目錄 (<span id="sidebar-deck-total">0</span>)
+          </span>
+          <div class="flex items-center gap-2">
+            <button onclick="openDeckManagerModal()" class="text-[11px] font-semibold hover:underline cursor-pointer" style="color: var(--text-secondary);" title="批次管理或刪除舊牌組">
+              🗂️ 管理
+            </button>
+            <button onclick="openAddCardModal()" class="text-[11px] font-semibold text-indigo-500 hover:underline cursor-pointer">
+              + 新增
+            </button>
+          </div>
+        </div>
+        <div id="deck-tree-container" class="space-y-0.5 overflow-y-auto pr-0.5"></div>
+      </div>
+
+      <!-- 4. Docked External Window Sync & Audio Accent -->
+      <div class="p-3 rounded-2xl border space-y-2.5" style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">
+            🪟 雙視窗聯動與發音
+          </span>
+          <label class="inline-flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-indigo-500">
+            <input id="auto-sync-window-checkbox" type="checkbox" checked onchange="savePreferences()" class="rounded accent-indigo-600" />
+            <span>切卡自動同步</span>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-3 gap-1">
+          <button onclick="openDockedSearchWindow('x')"
+            class="py-1.5 px-1.5 rounded-lg bg-slate-900 hover:bg-black text-white text-[11px] font-bold transition cursor-pointer">
+            𝕏 推文窗
+          </button>
+          <button onclick="openDockedSearchWindow('google')"
+            class="py-1.5 px-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold transition cursor-pointer">
+            🔍 圖片窗
+          </button>
+          <button onclick="openDockedSearchWindow('cambridge')"
+            class="py-1.5 px-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold transition cursor-pointer">
+            📖 詞典窗
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 pt-0.5">
+          <span class="text-[11px]" style="color: var(--text-muted);">預設發音口音：</span>
+          <div class="inline-flex rounded-lg p-0.5 border" style="background-color: var(--bg-card); border-color: var(--border-color);">
+            <button id="accent-btn-us" onclick="setPreferredAccent('en-US')"
+              class="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-600 text-white transition cursor-pointer">
+              🇺🇸 美式 US
+            </button>
+            <button id="accent-btn-gb" onclick="setPreferredAccent('en-GB')"
+              class="px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer" style="color: var(--text-secondary);">
+              🇬🇧 英式 UK
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Cloud & Local Hybrid Storage & Deck Cleanup -->
+      <div class="p-3 rounded-2xl border space-y-2" style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-bold uppercase tracking-wider" style="color: var(--text-muted);">
+            ☁️ 雲端與本機儲存
+          </span>
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-600">
+            自動雲端存檔
+          </span>
+        </div>
+        <div class="flex items-center justify-between text-xs" style="color: var(--text-secondary);">
+          <span>已儲存總卡片數</span>
+          <strong id="storage-total-cards-text" class="font-mono-code">0 張</strong>
+        </div>
+        <div class="flex items-center justify-between text-xs" style="color: var(--text-secondary);">
+          <span>本機媒體快取</span>
+          <strong id="storage-used-size-text" class="font-mono-code">計算中...</strong>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 pt-1">
+          <button onclick="openDeckManagerModal()"
+            class="py-1.5 px-2 rounded-lg border text-[11px] font-bold hover:border-indigo-500 transition cursor-pointer"
+            style="background-color: var(--bg-card); border-color: var(--border-color); color: var(--text-primary);">
+            🗂️ 管理/刪舊牌組
+          </button>
+          <button onclick="confirmResetEntireDatabase()"
+            class="py-1.5 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 text-[11px] font-bold transition cursor-pointer">
+            🧹 清空重置空間
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- Floating Expand Sidebar Button (when collapsed on desktop) -->
+  <button id="expand-sidebar-btn" onclick="toggleSidebar()" title="展開側邊欄"
+    class="hidden fixed top-3.5 left-3.5 z-30 p-2.5 rounded-xl border shadow-lg cursor-pointer text-xs font-bold"
+    style="background-color: var(--bg-card); border-color: var(--border-color); color: var(--text-primary);">
+    ▶ 牌組
+  </button>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN WORKSPACE AREA                                                   -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 min-w-0 flex flex-col min-h-screen">
+
+    <!-- Top Progress & Active Deck Header -->
+    <header class="px-5 py-3 border-b flex flex-wrap items-center justify-between gap-3"
+      style="background-color: var(--bg-sidebar); border-color: var(--border-color);">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-500 text-xs font-extrabold shrink-0">
+          目前牌組
+        </span>
+        <h1 id="header-active-deck-name" class="text-sm sm:text-base font-extrabold truncate m-0">
+          精選日常高頻與社群語境單字
+        </h1>
+      </div>
+
+      <div class="flex items-center gap-4 text-xs">
+        <div class="flex items-center gap-2">
+          <span style="color: var(--text-muted);">進度</span>
+          <div class="w-28 sm:w-36 h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+            <div id="deck-progress-bar" class="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300" style="width: 0%;"></div>
+          </div>
+          <strong id="header-progress-text" class="font-mono-code">0 / 0</strong>
+        </div>
+        <div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border" style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+          <span>🔥 本次已複習</span>
+          <strong id="header-session-reviewed" class="text-indigo-500 font-mono-code">0</strong>
+        </div>
+      </div>
+    </header>
+
+    <!-- =================================================================== -->
+    <!-- VIEW 1: FLASHCARD STUDY STAGE                                       -->
+    <!-- =================================================================== -->
+    <section id="study-workspace-view" class="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto flex flex-col gap-4">
+
+      <!-- Empty / Completed Queue Banner -->
+      <div id="queue-completed-banner" class="hidden rounded-3xl border p-10 text-center shadow-sm my-auto"
+        style="background-color: var(--bg-card); border-color: var(--border-color);">
+        <div class="text-5xl mb-3">🎉</div>
+        <h2 class="text-2xl font-extrabold mb-2">太棒了！目前待複習卡片已全部完成</h2>
+        <p class="text-sm max-w-md mx-auto mb-6" style="color: var(--text-secondary);">
+          你可以切換至「♾️ 自由全覽模式」繼續瀏覽此牌組的所有單字，或匯入新的 Anki 牌組。
+        </p>
+        <div class="flex flex-wrap justify-center gap-3">
+          <button onclick="setStudyQueueMode('all')"
+            class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold shadow-md transition cursor-pointer">
+            ♾️ 進入自由全覽繼續背誦
+          </button>
+          <button onclick="document.getElementById('anki-file-input').click()"
+            class="px-5 py-2.5 rounded-xl border text-sm font-bold hover:border-indigo-500 transition cursor-pointer"
+            style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+            📥 匯入新牌組
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Flashcard Container -->
+      <div id="flashcard-stage-container" class="flex-1 flex flex-col gap-4">
+
+        <!-- CARD FRONT: TWO-COLUMN VISUAL IMAGE + REAL X SEARCH SYNC CONSOLE -->
+        <div class="rounded-3xl border shadow-sm overflow-hidden grid grid-cols-1 xl:grid-cols-12"
+          style="background-color: var(--bg-card); border-color: var(--border-color);">
+
+          <!-- LEFT 6 COLS: WORD HEADER + VISUAL IMAGE CAROUSEL -->
+          <div class="xl:col-span-6 p-5 sm:p-6 border-b xl:border-b-0 xl:border-r flex flex-col justify-between gap-4"
+            style="border-color: var(--border-color);">
+
+            <!-- Word Title & Pronunciation Controls -->
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <span id="card-badge-status" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/15 text-indigo-500">
+                  新單字
+                </span>
+                <div class="flex items-center gap-1.5">
+                  <button onclick="prevCardInFreeMode()" id="btn-prev-card" title="上一張 (←)"
+                    class="px-2.5 py-1 rounded-lg border text-xs font-bold hover:border-indigo-500 transition cursor-pointer"
+                    style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+                    ◀ 上一張
+                  </button>
+                  <button onclick="nextCardInFreeMode()" id="btn-next-card" title="跳過 / 下一張 (→)"
+                    class="px-2.5 py-1 rounded-lg border text-xs font-bold hover:border-indigo-500 transition cursor-pointer"
+                    style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+                    下一張 ▶
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-baseline gap-3">
+                <h2 id="card-front-word" class="text-3xl sm:text-4xl font-black tracking-tight m-0 break-words">
+                  serendipity
+                </h2>
+                <span id="card-front-phonetic" class="text-sm font-mono-code" style="color: var(--text-muted);">
+                  /ˌser.ənˈdɪp.ə.ti/
+                </span>
+                <span id="card-front-pos" class="px-2 py-0.5 rounded-md text-xs font-bold bg-amber-500/15 text-amber-600">
+                  noun
+                </span>
+              </div>
+
+              <!-- Audio Playback Row -->
+              <div class="flex flex-wrap items-center gap-2 mt-3">
+                <button onclick="speakCurrentWord()" title="朗讀單字 (快捷鍵 S)"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition cursor-pointer">
+                  <span>🔊 朗讀單字</span>
+                  <kbd class="px-1.5 py-0.2 rounded bg-indigo-800 text-[10px] font-mono-code">S</kbd>
+                </button>
+                <button onclick="speakCurrentWord('en-US')"
+                  class="px-2.5 py-1.5 rounded-xl border text-xs font-semibold hover:border-indigo-500 transition cursor-pointer"
+                  style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+                  🇺🇸 US
+                </button>
+                <button onclick="speakCurrentWord('en-GB')"
+                  class="px-2.5 py-1.5 rounded-xl border text-xs font-semibold hover:border-indigo-500 transition cursor-pointer"
+                  style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+                  🇬🇧 UK
+                </button>
+                <button id="btn-play-anki-audio" onclick="playEmbeddedAnkiAudio()"
+                  class="hidden px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer">
+                  🎧 原聲檔
+                </button>
+              </div>
+            </div>
+
+            <!-- Visual Image Carousel Box -->
+            <div class="rounded-2xl border p-3.5 flex flex-col gap-2.5"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-sm">🖼️</span>
+                  <span class="text-xs font-extrabold">視覺情境聯想圖</span>
+                  <span id="image-source-tag" class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-500/15" style="color: var(--text-muted);">
+                    自動檢索
+                  </span>
+                </div>
+                <button onclick="openDockedSearchWindow('google')" title="開啟 Google 圖片視窗 (快捷鍵 G)"
+                  class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold transition cursor-pointer">
+                  <span>🔍 Google 圖片</span>
+                  <kbd class="px-1 rounded bg-blue-800 text-[10px] font-mono-code">G</kbd>
+                </button>
+              </div>
+
+              <!-- Main Carousel Viewport -->
+              <div class="relative w-full h-52 sm:h-60 rounded-xl overflow-hidden bg-slate-900/5 dark:bg-black/30 flex items-center justify-center group">
+                <img id="carousel-main-img" src="" alt="Visual context"
+                  onclick="openImageLightbox()"
+                  class="w-full h-full object-contain cursor-zoom-in transition duration-200" />
+                <div id="carousel-loading-state" class="hidden absolute inset-0 flex flex-col items-center justify-center text-xs gap-2" style="color: var(--text-muted);">
+                  <div class="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span>正在檢索相關實景圖片...</span>
+                </div>
+
+                <!-- Prev / Next Image Controls -->
+                <button onclick="stepCarouselImage(-1)"
+                  class="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/55 hover:bg-black/80 text-white flex items-center justify-center text-xs font-bold opacity-85 hover:opacity-100 transition cursor-pointer">
+                  ◀
+                </button>
+                <button onclick="stepCarouselImage(1)"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/55 hover:bg-black/80 text-white flex items-center justify-center text-xs font-bold opacity-85 hover:opacity-100 transition cursor-pointer">
+                  ▶
+                </button>
+                <div id="carousel-caption"
+                  class="absolute bottom-2 left-2 right-2 px-2.5 py-1 rounded-lg bg-black/60 text-white text-[11px] truncate backdrop-blur-xs">
+                  載入中...
+                </div>
+              </div>
+
+              <!-- Thumbnail Strip -->
+              <div id="carousel-thumbnails" class="flex items-center gap-2 overflow-x-auto py-0.5"></div>
+            </div>
+          </div>
+
+          <!-- RIGHT 6 COLS: REAL X (TWITTER) SEARCH WINDOW SYNC CONSOLE + CONTEXT EXAMPLES -->
+          <div class="xl:col-span-6 p-5 sm:p-6 flex flex-col justify-between gap-4">
+
+            <!-- Real X Search Console Card -->
+            <div class="rounded-2xl border p-4 space-y-3.5"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-7 h-7 rounded-lg bg-black text-white flex items-center justify-center font-black text-sm">𝕏</span>
+                  <div>
+                    <div class="text-xs font-extrabold">真實 X (Twitter) 搜尋視窗控制台</div>
+                    <div class="text-[11px]" style="color: var(--text-muted);">共用瀏覽器登入狀態，即時呈現母語者真實推文</div>
+                  </div>
+                </div>
+                <span id="x-window-status-badge" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-500/15" style="color: var(--text-muted);">
+                  ⚪ 尚未開啟 X 視窗
+                </span>
+              </div>
+
+              <!-- Primary Dock & Sync Action Buttons -->
+              <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                <button onclick="syncRealXSearchWindow(true)" title="開啟並停靠真實 X 搜尋視窗 (快捷鍵 X)"
+                  class="sm:col-span-8 py-2.5 px-3.5 rounded-xl bg-slate-950 hover:bg-black text-white text-xs font-extrabold shadow-sm flex items-center justify-center gap-2 transition cursor-pointer">
+                  <span>𝕏 開啟並停靠真實 X 搜尋視窗</span>
+                  <kbd class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono-code">X</kbd>
+                </button>
+                <button onclick="arrangeSplitScreenHint()"
+                  class="sm:col-span-4 py-2.5 px-3 rounded-xl border text-xs font-bold hover:border-indigo-500 transition cursor-pointer"
+                  style="background-color: var(--bg-card); border-color: var(--border-color);">
+                  📐 左60% / 右40%
+                </button>
+              </div>
+
+              <!-- Auto-sync toggle + Sort mode (Top vs Live) -->
+              <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t" style="border-color: var(--border-color);">
+                <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-semibold">
+                  <input id="x-auto-sync-checkbox" type="checkbox" checked onchange="savePreferences()" class="rounded accent-indigo-600" />
+                  <span>⚡ 切卡 / 改篩選時自動同步 X 視窗</span>
+                </label>
+
+                <div class="inline-flex rounded-xl p-0.5 border" style="background-color: var(--bg-card); border-color: var(--border-color);">
+                  <button id="x-sort-top" onclick="setXSortMode('top')"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-600 text-white transition cursor-pointer">
+                    🔥 熱門 Top (T)
+                  </button>
+                  <button id="x-sort-live" onclick="setXSortMode('live')"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer" style="color: var(--text-secondary);">
+                    ⚡ 最新 Live
+                  </button>
+                </div>
+              </div>
+
+              <!-- Multi-select X Search Filter Pills -->
+              <div class="space-y-1.5">
+                <div class="text-[11px] font-bold" style="color: var(--text-muted);">搜尋過濾條件（點擊即時切換）：</div>
+                <div class="flex flex-wrap gap-1.5">
+                  <button id="x-pill-no-rt" onclick="toggleXFilterPill('noRetweets')"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer">
+                    🚫 排除轉推 (R)
+                  </button>
+                  <button id="x-pill-lang-en" onclick="toggleXFilterPill('langEn')"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer">
+                    🌐 僅限英文
+                  </button>
+                  <button id="x-pill-min-faves" onclick="toggleXFilterPill('minFaves')"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer">
+                    ⭐ 高讚精選 (20+)
+                  </button>
+                  <button id="x-pill-no-replies" onclick="toggleXFilterPill('noReplies')"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer">
+                    💬 排除回覆
+                  </button>
+                  <button id="x-pill-exact" onclick="toggleXFilterPill('exactQuote')"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer">
+                    🎯 精確引號
+                  </button>
+                </div>
+              </div>
+
+              <!-- Live Editable Query Syntax Preview -->
+              <div class="flex items-center gap-1.5">
+                <input id="x-query-preview-input" type="text"
+                  onkeydown="if(event.key==='Enter') syncRealXSearchWindow(true, true)"
+                  class="flex-1 min-w-0 px-3 py-1.5 rounded-xl border text-xs font-mono-code focus:outline-none focus:border-indigo-500"
+                  style="background-color: var(--bg-card); border-color: var(--border-color); color: var(--text-primary);" />
+                <button onclick="copyXQuerySyntax()"
+                  class="px-2.5 py-1.5 rounded-xl border text-xs font-bold hover:border-indigo-500 transition cursor-pointer shrink-0"
+                  style="background-color: var(--bg-card); border-color: var(--border-color);">
+                  📋 複製
+                </button>
+                <button onclick="syncRealXSearchWindow(true, true)"
+                  class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition cursor-pointer shrink-0">
+                  搜尋
+                </button>
+              </div>
+            </div>
+
+            <!-- Live Authentic Context Sentences Box (Quick Reference on Front) -->
+            <div class="rounded-2xl border p-4 flex-1 flex flex-col justify-between gap-2"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold">💬 母語者真實例句速覽</span>
+                <span class="text-[11px]" style="color: var(--text-muted);">點擊喇叭可朗讀整句</span>
+              </div>
+              <div id="context-sentences-list" class="space-y-2 text-xs"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- FLIP CARD TRIGGER BAR (Shown when card is on Front) -->
+        <div id="flip-prompt-bar" class="flex justify-center">
+          <button onclick="flipFlashcard()"
+            class="w-full max-w-xl py-3.5 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-extrabold text-sm sm:text-base shadow-lg flex items-center justify-center gap-3 transition cursor-pointer">
+            <span>👁️ 顯示中文釋義與卡片背面</span>
+            <kbd class="px-2 py-0.5 rounded-lg bg-white/20 text-xs font-mono-code">Space</kbd>
+          </button>
+        </div>
+
+        <!-- CARD BACK: MEANING, ANKI BACK HTML, NOTES & SRS RATING BUTTONS -->
+        <div id="card-back-panel" class="hidden rounded-3xl border p-5 sm:p-6 shadow-sm space-y-5 animate-fade"
+          style="background-color: var(--bg-card); border-color: var(--border-color);">
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <!-- Left 7 Cols: Meaning & Original Anki Back Content -->
+            <div class="lg:col-span-7 space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-600 text-xs font-extrabold">
+                  釋義與卡片背面內容
+                </span>
+              </div>
+              <div id="card-back-meaning" class="text-lg sm:text-xl font-bold leading-relaxed"></div>
+              <div id="card-back-extra-html" class="anki-rich-html text-sm leading-relaxed pt-2 border-t"
+                style="border-color: var(--border-color); color: var(--text-secondary);"></div>
+            </div>
+
+            <!-- Right 5 Cols: Personal Mnemonic Notes -->
+            <div class="lg:col-span-5 rounded-2xl border p-4 flex flex-col gap-2"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+              <div class="flex items-center justify-between">
+                <label for="card-personal-note" class="text-xs font-extrabold">📝 個人助記筆記（自動儲存）</label>
+                <span id="note-saved-badge" class="text-[11px] text-emerald-500 font-semibold opacity-0 transition-opacity">✓ 已儲存</span>
+              </div>
+              <textarea id="card-personal-note" rows="4" oninput="handleNoteInput()"
+                placeholder="輸入詞根聯想、自己造的句子或易混淆字提醒..."
+                class="w-full rounded-xl border p-2.5 text-xs leading-relaxed resize-y focus:outline-none focus:border-indigo-500"
+                style="background-color: var(--bg-card); border-color: var(--border-color); color: var(--text-primary);"></textarea>
+            </div>
+          </div>
+
+          <!-- Spaced Repetition (SRS) 4-Button Rating Bar -->
+          <div class="pt-4 border-t" style="border-color: var(--border-color);">
+            <div class="text-center text-xs font-bold mb-2.5" style="color: var(--text-muted);">
+              根據你對這個單字的熟悉度選擇複習間隔（支援鍵盤數字鍵 <kbd class="px-1.5 py-0.5 rounded border font-mono-code">1</kbd> ~ <kbd class="px-1.5 py-0.5 rounded border font-mono-code">4</kbd>）：
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-w-3xl mx-auto">
+              <button onclick="rateCurrentCard(1)"
+                class="py-3 px-3 rounded-2xl bg-rose-500/10 hover:bg-rose-600 text-rose-600 hover:text-white border border-rose-500/30 transition cursor-pointer flex flex-col items-center">
+                <span class="text-xs font-extrabold">1 · 重來 (Again)</span>
+                <span id="interval-label-1" class="text-[11px] opacity-80 mt-0.5">&lt; 1 分鐘</span>
+              </button>
+              <button onclick="rateCurrentCard(2)"
+                class="py-3 px-3 rounded-2xl bg-amber-500/10 hover:bg-amber-600 text-amber-600 hover:text-white border border-amber-500/30 transition cursor-pointer flex flex-col items-center">
+                <span class="text-xs font-extrabold">2 · 困難 (Hard)</span>
+                <span id="interval-label-2" class="text-[11px] opacity-80 mt-0.5">12 小時</span>
+              </button>
+              <button onclick="rateCurrentCard(3)"
+                class="py-3 px-3 rounded-2xl bg-emerald-500/10 hover:bg-emerald-600 text-emerald-600 hover:text-white border border-emerald-500/30 transition cursor-pointer flex flex-col items-center">
+                <span class="text-xs font-extrabold">3 · 良好 (Good)</span>
+                <span id="interval-label-3" class="text-[11px] opacity-80 mt-0.5">1 天</span>
+              </button>
+              <button onclick="rateCurrentCard(4)"
+                class="py-3 px-3 rounded-2xl bg-sky-500/10 hover:bg-sky-600 text-sky-600 hover:text-white border border-sky-500/30 transition cursor-pointer flex flex-col items-center">
+                <span class="text-xs font-extrabold">4 · 簡單 (Easy)</span>
+                <span id="interval-label-4" class="text-[11px] opacity-80 mt-0.5">4 天</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- VIEW 2: DECK BROWSER & SEARCH TABLE                                 -->
+    <!-- =================================================================== -->
+    <section id="table-workspace-view" class="hidden flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto flex flex-col gap-4">
+      <div class="rounded-3xl border p-5 shadow-sm flex flex-col gap-4"
+        style="background-color: var(--bg-card); border-color: var(--border-color);">
+
+        <!-- Filter & Action Toolbar -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[240px]">
+            <input id="table-search-input" type="text" oninput="renderDeckTable()"
+              placeholder="🔍 搜尋單字、中文釋義或個人筆記..."
+              class="flex-1 min-w-[200px] px-3.5 py-2 rounded-xl border text-xs focus:outline-none focus:border-indigo-500"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-primary);" />
+            <select id="table-status-filter" onchange="renderDeckTable()"
+              class="px-3 py-2 rounded-xl border text-xs font-semibold cursor-pointer"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-primary);">
+              <option value="all">全部狀態</option>
+              <option value="due">待複習 / 新卡</option>
+              <option value="mastered">已掌握</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="openAddCardModal()"
+              class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer">
+              + 新增單字卡
+            </button>
+            <button onclick="exportCurrentDeckCSV()"
+              class="px-3.5 py-2 rounded-xl border text-xs font-bold hover:border-indigo-500 cursor-pointer"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+              📤 匯出 CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- Cards Table -->
+        <div class="overflow-x-auto rounded-2xl border" style="border-color: var(--border-color);">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b" style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-muted);">
+                <th class="py-3 px-4 font-bold">單字 (正面)</th>
+                <th class="py-3 px-4 font-bold">釋義 (背面)</th>
+                <th class="py-3 px-4 font-bold">記憶狀態</th>
+                <th class="py-3 px-4 font-bold text-right">操作</th>
+              </tr>
+            </thead>
+            <tbody id="deck-table-tbody" class="divide-y" style="border-color: var(--border-color);"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODALS & TOAST NOTIFICATIONS                                          -->
+  <!-- ===================================================================== -->
+
+  <!-- Image Lightbox Modal -->
+  <div id="image-lightbox-modal" onclick="closeImageLightbox()"
+    class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 animate-fade cursor-zoom-out">
+    <div onclick="event.stopPropagation()" class="max-w-4xl w-full flex flex-col items-center gap-3">
+      <img id="lightbox-img" src="" alt="Enlarged preview" class="max-h-[80vh] max-w-full rounded-2xl shadow-2xl object-contain" />
+      <div class="flex items-center gap-3">
+        <span id="lightbox-caption" class="text-white text-xs bg-black/60 px-3 py-1.5 rounded-xl"></span>
+        <button onclick="closeImageLightbox()" class="px-4 py-1.5 rounded-xl bg-white text-slate-900 text-xs font-bold cursor-pointer">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add New Card Modal -->
+  <div id="add-card-modal" onclick="closeAddCardModal()"
+    class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade">
+    <div onclick="event.stopPropagation()" class="max-w-lg w-full rounded-2xl p-6 shadow-2xl border space-y-4"
+      style="background-color: var(--bg-card); border-color: var(--border-color);">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-extrabold m-0">➕ 新增單字卡至目前牌組</h3>
+        <button onclick="closeAddCardModal()" class="px-2 py-1 rounded-lg hover:bg-slate-500/15 font-bold cursor-pointer">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold mb-1">英文單字或片語 *</label>
+          <input id="new-card-front" type="text" placeholder="例如：ephemeral"
+            class="w-full px-3 py-2 rounded-xl border focus:outline-none focus:border-indigo-500"
+            style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-primary);" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold mb-1">音標（選填）</label>
+            <input id="new-card-phonetic" type="text" placeholder="/ɪˈfem.ər.əl/"
+              class="w-full px-3 py-2 rounded-xl border focus:outline-none focus:border-indigo-500"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-primary);" />
+          </div>
+          <div>
+            <label class="block font-bold mb-1">詞性（選填）</label>
+            <input id="new-card-pos" type="text" placeholder="adjective"
+              class="w-full px-3 py-2 rounded-xl border focus:outline-none focus:border-indigo-500"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-primary);" />
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold mb-1">中文釋義 / 背面說明 *</label>
+          <textarea id="new-card-back" rows="3" placeholder="短暫的；朝生暮死的"
+            class="w-full px-3 py-2 rounded-xl border focus:outline-none focus:border-indigo-500"
+            style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-primary);"></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeAddCardModal()" class="px-4 py-2 rounded-xl border text-xs font-semibold cursor-pointer"
+          style="background-color: var(--bg-subtle); border-color: var(--border-color);">取消</button>
+        <button onclick="submitNewCardModal()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer">
+          儲存卡片
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Confirm Modal (Never uses native confirm()) -->
+  <div id="confirm-dialog-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade">
+    <div class="max-w-md w-full rounded-2xl p-6 shadow-2xl border" style="background-color: var(--bg-card); border-color: var(--border-color);">
+      <div class="flex items-start gap-3">
+        <div class="text-2xl">⚠️</div>
+        <div>
+          <h3 id="confirm-dialog-title" class="text-base font-extrabold m-0">確認操作</h3>
+          <p id="confirm-dialog-message" class="text-sm mt-1.5 mb-0" style="color: var(--text-secondary);">確定要執行此操作嗎？</p>
+        </div>
+      </div>
+      <div class="mt-6 flex justify-end gap-2.5">
+        <button onclick="closeConfirmDialog()" class="px-4 py-2 rounded-xl border text-sm font-semibold cursor-pointer"
+          style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-secondary);">取消</button>
+        <button id="confirm-dialog-ok" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold cursor-pointer">確認執行</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Deck Manager Modal (Quickly view, switch, or delete old decks) -->
+  <div id="deck-manager-modal" onclick="closeDeckManagerModal()" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade">
+    <div onclick="event.stopPropagation()" class="max-w-2xl w-full rounded-2xl p-6 shadow-2xl border max-h-[85vh] flex flex-col"
+      style="background-color: var(--bg-card); border-color: var(--border-color);">
+      <div class="flex items-center justify-between pb-3 border-b" style="border-color: var(--border-color);">
+        <div>
+          <h3 class="text-lg font-extrabold m-0">🗂️ 牌組空間管理與舊牌組清理</h3>
+          <p class="text-xs mt-0.5 mb-0" style="color: var(--text-muted);">目前使用瀏覽器 IndexedDB 大容量引擎，可隨時清理不再需要的牌組</p>
+        </div>
+        <button onclick="closeDeckManagerModal()" class="px-2.5 py-1 rounded-lg hover:bg-slate-500/15 font-bold cursor-pointer">✕</button>
+      </div>
+
+      <div id="deck-manager-list" class="flex-1 overflow-y-auto py-3 space-y-2"></div>
+
+      <div class="pt-3 border-t flex items-center justify-between gap-3" style="border-color: var(--border-color);">
+        <button onclick="confirmResetEntireDatabase()" class="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 text-xs font-bold cursor-pointer">
+          🧹 清空所有匯入牌組並還原預設
+        </button>
+        <button onclick="closeDeckManagerModal()" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer">
+          完成
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account Login & Cloud Sync Modal -->
+  <div id="account-auth-modal" onclick="closeAccountAuthModal()" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade">
+    <div onclick="event.stopPropagation()" class="max-w-md w-full rounded-3xl p-6 shadow-2xl border space-y-5"
+      style="background-color: var(--bg-card); border-color: var(--border-color);">
+      <div class="flex items-center justify-between pb-3 border-b" style="border-color: var(--border-color);">
+        <div>
+          <h3 class="text-lg font-extrabold m-0">👤 帳號登入與雲端存檔同步</h3>
+          <p class="text-xs mt-0.5 mb-0" style="color: var(--text-muted);">登入後自動同步牌組、複習排程與個人筆記</p>
+        </div>
+        <button onclick="closeAccountAuthModal()" class="px-2.5 py-1 rounded-lg hover:bg-slate-500/15 font-bold cursor-pointer">✕</button>
+      </div>
+
+      <!-- Current Account Status Card -->
+      <div class="p-3.5 rounded-2xl border space-y-2" style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-bold" style="color: var(--text-muted);">目前連線身分</span>
+          <span id="modal-auth-type-badge" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/15 text-indigo-500">
+            雲端訪客工作區
+          </span>
+        </div>
+        <div id="modal-auth-email" class="text-sm font-extrabold break-all">尚未綁定個人 Email</div>
+        <div class="text-[11px] space-y-1 pt-1 border-t" style="border-color: var(--border-color); color: var(--text-muted);">
+          <div>完整雲端識別碼 (User ID)：</div>
+          <div class="flex items-center gap-2">
+            <code id="modal-full-uid" class="flex-1 p-1.5 rounded-lg border text-[11px] font-mono-code break-all select-all"
+              style="background-color: var(--bg-card); border-color: var(--border-color); color: var(--text-primary);">載入中...</code>
+            <button onclick="copyCurrentUserId()" class="px-2.5 py-1.5 rounded-lg border text-xs font-bold hover:border-indigo-500 shrink-0 cursor-pointer"
+              style="background-color: var(--bg-card); border-color: var(--border-color);">
+              📋 複製
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sign-in Options (Shown when not signed into a named account) -->
+      <div id="auth-signin-section" class="space-y-4">
+        <button onclick="handleGoogleSignIn()"
+          class="w-full py-2.5 px-4 rounded-xl border font-bold text-xs flex items-center justify-center gap-2.5 hover:border-indigo-500 shadow-xs transition cursor-pointer"
+          style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+          <span class="text-base">G</span>
+          <span>使用 Google 帳號一鍵登入並同步</span>
+        </button>
+
+        <div class="relative flex items-center justify-center">
+          <div class="border-t w-full" style="border-color: var(--border-color);"></div>
+          <span class="px-3 text-[11px] shrink-0" style="background-color: var(--bg-card); color: var(--text-muted);">或使用 Email 帳號</span>
+          <div class="border-t w-full" style="border-color: var(--border-color);"></div>
+        </div>
+
+        <div class="space-y-2.5 text-xs">
+          <div>
+            <label class="block font-bold mb-1">電子信箱 (Email)</label>
+            <input id="auth-email-input" type="email" placeholder="you@example.com"
+              class="w-full px-3 py-2 rounded-xl border focus:outline-none focus:border-indigo-500"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-primary);" />
+          </div>
+          <div>
+            <label class="block font-bold mb-1">密碼（至少 6 個字元）</label>
+            <input id="auth-password-input" type="password" placeholder="••••••••"
+              onkeydown="if(event.key==='Enter') handleEmailAuthSubmit('login')"
+              class="w-full px-3 py-2 rounded-xl border focus:outline-none focus:border-indigo-500"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color); color: var(--text-primary);" />
+          </div>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button onclick="handleEmailAuthSubmit('login')"
+              class="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition cursor-pointer">
+              🔑 登入帳號
+            </button>
+            <button onclick="handleEmailAuthSubmit('register')"
+              class="py-2.5 px-3 rounded-xl border font-bold hover:border-indigo-500 transition cursor-pointer"
+              style="background-color: var(--bg-subtle); border-color: var(--border-color);">
+              ✨ 註冊新帳號
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signed-in Actions (Shown when signed in with Google/Email) -->
+      <div id="auth-signedin-actions" class="hidden space-y-2.5">
+        <button onclick="forceFullCloudUpload()"
+          class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer">
+          ☁️ 立即將目前所有牌組與進度推送至雲端
+        </button>
+        <button onclick="handleUserSignOut()"
+          class="w-full py-2.5 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 text-xs font-bold transition cursor-pointer">
+          🚪 登出目前帳號
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-stack" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none max-w-sm"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import {
+      getAuth,
+      signInAnonymously,
+      signInWithCustomToken,
+      onAuthStateChanged,
+      GoogleAuthProvider,
+      signInWithPopup,
+      signInWithEmailAndPassword,
+      createUserWithEmailAndPassword,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      setDoc,
+      deleteDoc,
+      onSnapshot,
+      collection,
+      writeBatch
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // =========================================================================
+    // 1. GLOBAL WORKSPACE STATE & DEFAULT SAMPLE DECK
+    // =========================================================================
+    const DEFAULT_DECK_ID = 'deck_default_featured';
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'anki-vocab-studio-default';
+
+    const SAMPLE_CARDS = [
+      {
+        id: 'sample_1',
+        deckId: DEFAULT_DECK_ID,
+        front: 'serendipity',
+        phonetic: '/ˌser.ənˈdɪp.ə.ti/',
+        pos: 'noun',
+        back: '意外發現珍奇事物的本領；機緣巧合',
+        backHtml: '<p><strong>意外發現珍奇事物的本領；機緣巧合</strong></p><p>指在沒有刻意尋找的情況下，偶然發現美好或有價值的事物。</p>',
+        note: '源自童話《錫蘭三王子》(The Three Princes of Serendip)。',
+        due: 0,
+        interval: 0,
+        ease: 2.5,
+        reps: 0
+      },
+      {
+        id: 'sample_2',
+        deckId: DEFAULT_DECK_ID,
+        front: 'procrastinate',
+        phonetic: '/prəˈkræs.tɪ.neɪt/',
+        pos: 'verb',
+        back: '拖延；耽擱；延遲行動',
+        backHtml: '<p><strong>拖延；耽擱</strong></p><p>pro- (向前) + crastinus (明天的) → 把事情一直推到明天。</p>',
+        note: '',
+        due: 0,
+        interval: 0,
+        ease: 2.5,
+        reps: 0
+      },
+      {
+        id: 'sample_3',
+        deckId: DEFAULT_DECK_ID,
+        front: 'ubiquitous',
+        phonetic: '/juːˈbɪk.wɪ.təs/',
+        pos: 'adjective',
+        back: '無所不在的；隨處可見的',
+        backHtml: '<p><strong>無所不在的；十分普遍的</strong></p><p>常用來形容智慧型手機、咖啡廳或網路文化無處不在。</p>',
+        note: '',
+        due: 0,
+        interval: 0,
+        ease: 2.5,
+        reps: 0
+      },
+      {
+        id: 'sample_4',
+        deckId: DEFAULT_DECK_ID,
+        front: 'ephemeral',
+        phonetic: '/ɪˈfem.ər.əl/',
+        pos: 'adjective',
+        back: '短暫的；轉瞬即逝的；朝生暮死的',
+        backHtml: '<p><strong>短暫的；轉瞬即逝的</strong></p><p>例如櫻花花期或社群媒體上的限時動態 (ephemeral content)。</p>',
+        note: '',
+        due: 0,
+        interval: 0,
+        ease: 2.5,
+        reps: 0
+      },
+      {
+        id: 'sample_5',
+        deckId: DEFAULT_DECK_ID,
+        front: 'resilient',
+        phonetic: '/rɪˈzɪl.jənt/',
+        pos: 'adjective',
+        back: '有韌性的；能迅速恢復元氣的',
+        backHtml: '<p><strong>有韌性的；適應力強的</strong></p><p>可形容材料具有彈性，也可形容人在逆境中快速復原。</p>',
+        note: '',
+        due: 0,
+        interval: 0,
+        ease: 2.5,
+        reps: 0
+      },
+      {
+        id: 'sample_6',
+        deckId: DEFAULT_DECK_ID,
+        front: 'meticulous',
+        phonetic: '/məˈtɪk.jə.ləs/',
+        pos: 'adjective',
+        back: '一絲不苟的；極其注重細節的',
+        backHtml: '<p><strong>一絲不苟的；細心周到的</strong></p><p>常見搭配：meticulous planning（周密的計畫）。</p>',
+        note: '',
+        due: 0,
+        interval: 0,
+        ease: 2.5,
+        reps: 0
+      }
+    ];
+
+    let appState = {
+      decks: [
+        { id: DEFAULT_DECK_ID, name: '精選日常高頻與社群語境單字', createdAt: Date.now() }
+      ],
+      cards: SAMPLE_CARDS.map(c => ({ ...c })),
+      activeDeckId: DEFAULT_DECK_ID
+    };
+
+    let prefs = {
+      dark: false,
+      sidebarCollapsed: false,
+      accent: 'en-US',
+      autoSyncWindow: true,
+      xAutoSync: true,
+      xSort: 'top',
+      xFilters: {
+        noRetweets: true,
+        langEn: true,
+        minFaves: false,
+        noReplies: false,
+        exactQuote: false
+      }
+    };
+
+    let workspaceMode = 'study'; // 'study' | 'table'
+    let studyQueueMode = 'due'; // 'due' | 'all'
+    let freeBrowseCursor = 0;
+    let sessionReviewedCount = 0;
+    let currentCard = null;
+    let currentLookupWord = 'serendipity';
+    let isCardFlipped = false;
+
+    let carouselImages = [];
+    let carouselIndex = 0;
+    let sessionMediaBlobs = {};
+    const imageCache = new Map();
+    const exampleCache = new Map();
+
+    let dockedXWindow = null;
+    let dockedOtherWindow = null;
+    let activeDockedProvider = 'x';
+    let confirmCallback = null;
+    let noteSaveTimer = null;
+
+    // Firebase instances
+    let firebaseApp = null;
+    let auth = null;
+    let db = null;
+    let currentAuthUser = null;
+    let unsubscribeDecks = null;
+    let unsubscribeCards = null;
+
+    // =========================================================================
+    // 2. PREFERENCES, THEME & SIDEBAR CONTROLS
+    // =========================================================================
+    function loadPreferences() {
+      try {
+        const raw = localStorage.getItem('anki_studio_prefs_v3');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          prefs = {
+            ...prefs,
+            ...parsed,
+            xFilters: { ...prefs.xFilters, ...(parsed.xFilters || {}) }
+          };
+        }
+      } catch (e) {}
+
+      const autoWinCb = document.getElementById('auto-sync-window-checkbox');
+      const xAutoCb = document.getElementById('x-auto-sync-checkbox');
+      if (autoWinCb) autoWinCb.checked = !!prefs.autoSyncWindow;
+      if (xAutoCb) xAutoCb.checked = !!prefs.xAutoSync;
+      setPreferredAccent(prefs.accent, false);
+    }
+
+    function savePreferences() {
+      const autoWinCb = document.getElementById('auto-sync-window-checkbox');
+      const xAutoCb = document.getElementById('x-auto-sync-checkbox');
+      if (autoWinCb) prefs.autoSyncWindow = autoWinCb.checked;
+      if (xAutoCb) prefs.xAutoSync = xAutoCb.checked;
+      try {
+        localStorage.setItem('anki_studio_prefs_v3', JSON.stringify(prefs));
+      } catch (e) {}
+    }
+
+    function toggleTheme() {
+      prefs.dark = !prefs.dark;
+      applyThemeUI();
+      savePreferences();
+    }
+
+    function applyThemeUI() {
+      const htmlEl = document.documentElement;
+      const iconEl = document.getElementById('theme-toggle-icon');
+      if (prefs.dark) {
+        htmlEl.classList.add('dark');
+        if (iconEl) iconEl.textContent = '☀️';
+      } else {
+        htmlEl.classList.remove('dark');
+        if (iconEl) iconEl.textContent = '🌙';
+      }
+    }
+
+    function toggleSidebar() {
+      prefs.sidebarCollapsed = !prefs.sidebarCollapsed;
+      applySidebarUI();
+      savePreferences();
+    }
+
+    function applySidebarUI() {
+      const sidebar = document.getElementById('desktop-sidebar');
+      const expandBtn = document.getElementById('expand-sidebar-btn');
+      if (!sidebar || !expandBtn) return;
+      if (prefs.sidebarCollapsed) {
+        sidebar.classList.add('lg:hidden');
+        expandBtn.classList.remove('hidden');
+      } else {
+        sidebar.classList.remove('lg:hidden');
+        expandBtn.classList.add('hidden');
+      }
+    }
+
+    function setPreferredAccent(accent, persist = true) {
+      prefs.accent = accent;
+      const usBtn = document.getElementById('accent-btn-us');
+      const gbBtn = document.getElementById('accent-btn-gb');
+      if (usBtn && gbBtn) {
+        if (accent === 'en-US') {
+          usBtn.className = 'px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-600 text-white transition cursor-pointer';
+          gbBtn.className = 'px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer';
+          gbBtn.style.color = 'var(--text-secondary)';
+        } else {
+          gbBtn.className = 'px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-600 text-white transition cursor-pointer';
+          usBtn.className = 'px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer';
+          usBtn.style.color = 'var(--text-secondary)';
+        }
+      }
+      if (persist) savePreferences();
+    }
+
+    // =========================================================================
+    // 3. INDEXEDDB LARGE STORAGE & FIREBASE CLOUD AUTH / FIRESTORE SYNC
+    // =========================================================================
+    const IDB_NAME = 'AnkiVocabStudioDB_v3';
+    const IDB_VERSION = 1;
+
+    function openStudioIDB() {
+      return new Promise((resolve, reject) => {
+        if (!('indexedDB' in window)) {
+          reject(new Error('IndexedDB unavailable'));
+          return;
+        }
+        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const idb = e.target.result;
+          if (!idb.objectStoreNames.contains('state')) {
+            idb.createObjectStore('state');
+          }
+          if (!idb.objectStoreNames.contains('media')) {
+            idb.createObjectStore('media');
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function idbSaveState(stateObj) {
+      try {
+        const idb = await openStudioIDB();
+        return await new Promise((resolve) => {
+          const tx = idb.transaction('state', 'readwrite');
+          const serializableCards = (stateObj.cards || []).map(c => {
+            const copy = { ...c };
+            delete copy.embeddedImage;
+            delete copy.embeddedAudio;
+            return copy;
+          });
+          tx.objectStore('state').put({
+            decks: stateObj.decks || [],
+            cards: serializableCards,
+            activeDeckId: stateObj.activeDeckId || DEFAULT_DECK_ID
+          }, 'main');
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        });
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function idbLoadState() {
+      try {
+        const idb = await openStudioIDB();
+        return await new Promise((resolve) => {
+          const tx = idb.transaction('state', 'readonly');
+          const req = tx.objectStore('state').get('main');
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function idbSaveMediaBlob(name, blob) {
+      try {
+        const idb = await openStudioIDB();
+        return await new Promise((resolve) => {
+          const tx = idb.transaction('media', 'readwrite');
+          tx.objectStore('media').put(blob, name);
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        });
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function idbSaveMediaBlobsBatch(items) {
+      if (!items || items.length === 0) return true;
+      try {
+        const idb = await openStudioIDB();
+        return await new Promise((resolve) => {
+          const tx = idb.transaction('media', 'readwrite');
+          const store = tx.objectStore('media');
+          for (const { name, blob } of items) {
+            store.put(blob, name);
+          }
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        });
+      } catch (e) {
+        return false;
+      }
+    }
+// ... existing code ... -->
+    // Zstandard (ZSTD) Frame Decompressor for Anki collection.anki21b & media
+    async function decompressZstdSmart(src) {
+      if (!src || src.length < 4) return src;
+      const view = new DataView(src.buffer, src.byteOffset, src.byteLength);
+      if (view.getUint32(0, true) !== 0xFD2FB528) {
+        return src;
+      }
+
+      const cdnUrls = [
+        'https://cdn.jsdelivr.net/npm/fzstd@0.1.1/esm/index.browser.js',
+        'https://esm.sh/fzstd@0.1.1'
+      ];
+      for (const url of cdnUrls) {
+        try {
+          const mod = await import(url);
+          if (mod && typeof mod.decompress === 'function') {
+            return mod.decompress(src);
+          }
+        } catch (e) {}
+      }
+
+      return decompressZstdBytes(src);
+    }
+
+    function decompressZstdBytes(src) {
+      const MAGIC = 0xFD2FB528;
+      const view = new DataView(src.buffer, src.byteOffset, src.byteLength);
+      if (src.length < 8 || view.getUint32(0, true) !== MAGIC) {
+        return src;
+      }
+
+      let pos = 0;
+      const chunks = [];
+
+      while (pos + 4 <= src.length) {
+        const magic = view.getUint32(pos, true);
+        if (magic !== MAGIC) break;
+        pos += 4;
+
+        const fhd = src[pos++];
+        const fcsFlag = (fhd >> 6) & 3;
+        const singleSegment = ((fhd >> 5) & 1) === 1;
+        const dictIdFlag = fhd & 3;
+
+        if (!singleSegment) pos += 1;
+        pos += [0, 1, 2, 4][dictIdFlag];
+        pos += fcsFlag === 0 ? (singleSegment ? 1 : 0) : [0, 2, 4, 8][fcsFlag];
+
+        while (pos + 3 <= src.length) {
+          const bh = src[pos] | (src[pos + 1] << 8) | (src[pos + 2] << 16);
+          pos += 3;
+          const lastBlock = (bh & 1) === 1;
+          const blockType = (bh >> 1) & 3;
+          const blockSize = bh >> 3;
+
+          if (blockType === 0) {
+            chunks.push(src.subarray(pos, pos + blockSize));
+            pos += blockSize;
+          } else if (blockType === 1) {
+            const val = src[pos++];
+            const arr = new Uint8Array(blockSize);
+            arr.fill(val);
+            chunks.push(arr);
+          } else {
+            throw new Error('離線環境無法解壓新版 Zstd Huffman 壓縮檔，請確認網路連線後重試');
+          }
+
+          if (lastBlock) break;
+        }
+      }
+
+      const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+      const out = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const c of chunks) {
+        out.set(c, offset);
+        offset += c.length;
+      }
+      return out;
+    }
+
+    // Pure-JS SQLite3 B-Tree Table & Record Parser (with Big-Endian Header & Bounds Guards)
+    function parseSqliteTables(dbBytes) {
+      if (!dbBytes || dbBytes.length < 100) {
+        throw new Error('資料庫檔案過小或已損毀');
+      }
+      const headerStr = new TextDecoder('ascii').decode(dbBytes.subarray(0, 15));
+      if (headerStr !== 'SQLite format 3') {
+        throw new Error('非標準 SQLite3 資料庫格式');
+      }
+
+      const view = new DataView(dbBytes.buffer, dbBytes.byteOffset, dbBytes.byteLength);
+      // SQLite3 header stores pageSize in BIG-ENDIAN at offset 16
+      let pageSize = view.getUint16(16, false);
+      if (pageSize === 1) pageSize = 65536;
+      if (pageSize < 512 || pageSize > 65536) {
+        throw new Error(`無效的 SQLite 分頁大小 (${pageSize})`);
+      }
+      const reservedSpace = dbBytes[20] || 0;
+      const usableSize = Math.max(480, pageSize - reservedSpace);
+
+      function readVarint(buf, offset) {
+        let val = 0n;
+        let bytesRead = 0;
+        const limit = Math.min(9, buf.length - offset);
+        for (let i = 0; i < limit; i++) {
+          const b = buf[offset + i];
+          bytesRead++;
+          if (i === 8) {
+            val = (val << 8n) | BigInt(b);
+            break;
+          }
+          val = (val << 7n) | BigInt(b & 0x7f);
+          if ((b & 0x80) === 0) break;
+        }
+        return { value: Number(val), bytesRead };
+      }
+
+      function readRecordPayload(payloadBytes) {
+        if (!payloadBytes || payloadBytes.length === 0) return [];
+        const hdr = readVarint(payloadBytes, 0);
+        if (hdr.bytesRead === 0 || hdr.value > payloadBytes.length) return [];
+
+        let hPtr = hdr.bytesRead;
+        const serialTypes = [];
+        while (hPtr < hdr.value && hPtr < payloadBytes.length) {
+          const st = readVarint(payloadBytes, hPtr);
+          if (st.bytesRead === 0) break;
+          serialTypes.push(st.value);
+          hPtr += st.bytesRead;
+        }
+
+        let dPtr = hdr.value;
+        const pView = new DataView(payloadBytes.buffer, payloadBytes.byteOffset, payloadBytes.byteLength);
+        const cols = [];
+        const decoder = new TextDecoder('utf-8');
+
+        for (const st of serialTypes) {
+          if (st === 0) cols.push(null);
+          else if (st === 1) {
+            if (dPtr + 1 > payloadBytes.length) break;
+            cols.push(pView.getInt8(dPtr));
+            dPtr += 1;
+          } else if (st === 2) {
+            if (dPtr + 2 > payloadBytes.length) break;
+            cols.push(pView.getInt16(dPtr, false));
+            dPtr += 2;
+          } else if (st === 3) {
+            if (dPtr + 3 > payloadBytes.length) break;
+            const v = (payloadBytes[dPtr] << 16) | (payloadBytes[dPtr + 1] << 8) | payloadBytes[dPtr + 2];
+            cols.push(v & 0x800000 ? v - 0x1000000 : v);
+            dPtr += 3;
+          } else if (st === 4) {
+            if (dPtr + 4 > payloadBytes.length) break;
+            cols.push(pView.getInt32(dPtr, false));
+            dPtr += 4;
+          } else if (st === 5) {
+            if (dPtr + 6 > payloadBytes.length) break;
+            let v = 0n;
+            for (let i = 0; i < 6; i++) v = (v << 8n) | BigInt(payloadBytes[dPtr + i]);
+            cols.push(Number(v));
+            dPtr += 6;
+          } else if (st === 6) {
+            if (dPtr + 8 > payloadBytes.length) break;
+            cols.push(Number(pView.getBigInt64(dPtr, false)));
+            dPtr += 8;
+          } else if (st === 7) {
+            if (dPtr + 8 > payloadBytes.length) break;
+            cols.push(pView.getFloat64(dPtr, false));
+            dPtr += 8;
+          } else if (st === 8) cols.push(0);
+          else if (st === 9) cols.push(1);
+          else if (st >= 12 && st % 2 === 0) {
+            const len = (st - 12) / 2;
+            if (dPtr + len > payloadBytes.length) break;
+            cols.push(payloadBytes.subarray(dPtr, dPtr + len));
+            dPtr += len;
+          } else if (st >= 13 && st % 2 === 1) {
+            const len = (st - 13) / 2;
+            if (dPtr + len > payloadBytes.length) break;
+            cols.push(decoder.decode(payloadBytes.subarray(dPtr, dPtr + len)));
+            dPtr += len;
+          }
+        }
+        return cols;
+      }
+
+      const visitedPages = new Set();
+
+      function traverseTableBTree(rootPageNum, rowsOut) {
+        if (!rootPageNum || rootPageNum < 1 || visitedPages.has(rootPageNum)) return;
+        visitedPages.add(rootPageNum);
+
+        const pageOffset = (rootPageNum - 1) * pageSize;
+        if (pageOffset < 0 || pageOffset + 12 > dbBytes.length) return;
+
+        const hdrOffset = rootPageNum === 1 ? pageOffset + 100 : pageOffset;
+        if (hdrOffset + 12 > dbBytes.length) return;
+
+        const pageType = dbBytes[hdrOffset];
+        const numCells = view.getUint16(hdrOffset + 3, false);
+        const cellPtrArrayStart = hdrOffset + (pageType === 0x05 ? 12 : 8);
+
+        if (pageType === 0x05) {
+          for (let i = 0; i < numCells; i++) {
+            const ptrPos = cellPtrArrayStart + i * 2;
+            if (ptrPos + 2 > dbBytes.length) break;
+            const cellPtr = view.getUint16(ptrPos, false);
+            const cellAbs = pageOffset + cellPtr;
+            if (cellAbs + 4 > dbBytes.length) continue;
+            const leftChildPage = view.getUint32(cellAbs, false);
+            traverseTableBTree(leftChildPage, rowsOut);
+          }
+          const rightMostPage = view.getUint32(hdrOffset + 8, false);
+          traverseTableBTree(rightMostPage, rowsOut);
+        } else if (pageType === 0x0d) {
+          const maxLocal = usableSize - 35;
+          const minLocal = ((usableSize - 12) * 32 / 255 | 0) - 23;
+
+          for (let i = 0; i < numCells; i++) {
+            const ptrPos = cellPtrArrayStart + i * 2;
+            if (ptrPos + 2 > dbBytes.length) break;
+            const cellPtr = view.getUint16(ptrPos, false);
+            let cPtr = pageOffset + cellPtr;
+            if (cPtr >= dbBytes.length) continue;
+
+            const pSizeInfo = readVarint(dbBytes, cPtr);
+            cPtr += pSizeInfo.bytesRead;
+            const rowIdInfo = readVarint(dbBytes, cPtr);
+            cPtr += rowIdInfo.bytesRead;
+
+            const totalPayload = pSizeInfo.value;
+            if (totalPayload <= 0 || totalPayload > dbBytes.length) continue;
+
+            let payload = null;
+            if (totalPayload <= maxLocal) {
+              if (cPtr + totalPayload > dbBytes.length) continue;
+              payload = dbBytes.subarray(cPtr, cPtr + totalPayload);
+            } else {
+              const surplus = minLocal + ((totalPayload - minLocal) % (usableSize - 4));
+              const localBytes = surplus <= maxLocal ? surplus : minLocal;
+              if (cPtr + localBytes + 4 > dbBytes.length) continue;
+
+              payload = new Uint8Array(totalPayload);
+              payload.set(dbBytes.subarray(cPtr, cPtr + localBytes), 0);
+              let written = localBytes;
+              let nextOvPage = view.getUint32(cPtr + localBytes, false);
+              let ovGuard = 0;
+
+              while (nextOvPage > 0 && written < totalPayload && ovGuard < 10000) {
+                ovGuard++;
+                const ovOffset = (nextOvPage - 1) * pageSize;
+                if (ovOffset < 0 || ovOffset + 4 > dbBytes.length) break;
+                nextOvPage = view.getUint32(ovOffset, false);
+                const chunkLen = Math.min(usableSize - 4, totalPayload - written, dbBytes.length - (ovOffset + 4));
+                if (chunkLen <= 0) break;
+                payload.set(dbBytes.subarray(ovOffset + 4, ovOffset + 4 + chunkLen), written);
+                written += chunkLen;
+              }
+            }
+
+            try {
+              const cols = readRecordPayload(payload);
+              if (cols.length > 0) {
+                rowsOut.push({ rowid: rowIdInfo.value, cols });
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      const masterRows = [];
+      traverseTableBTree(1, masterRows);
+      const tableRoots = {};
+      masterRows.forEach(r => {
+        if (r.cols[0] === 'table' && typeof r.cols[1] === 'string') {
+          tableRoots[r.cols[1]] = Number(r.cols[3]);
+        }
+      });
+
+      return {
+        readTable(tableName) {
+          const root = tableRoots[tableName];
+          if (!root) return [];
+          visitedPages.clear();
+          const rows = [];
+          traverseTableBTree(root, rows);
+          return rows;
+        }
+      };
+    }
+
+    function parseMediaManifest(mediaBytes) {
+      if (!mediaBytes || mediaBytes.length === 0) return {};
+      const text = new TextDecoder('utf-8').decode(mediaBytes).trim();
+      if (text.startsWith('{')) {
+        try {
+          return JSON.parse(text);
+        } catch (e) {}
+      }
+
+      // Parse Anki 2.1.50+ Protobuf MediaEntries (repeated MediaEntry entries = 1; string name = 1;)
+      const map = {};
+      const decoder = new TextDecoder('utf-8');
+      let p = 0;
+      let idx = 0;
+
+      function readPbVarint() {
+        let res = 0;
+        let shift = 0;
+        while (p < mediaBytes.length) {
+          const b = mediaBytes[p++];
+          res |= (b & 0x7f) << shift;
+          if ((b & 0x80) === 0) break;
+          shift += 7;
+        }
+        return res >>> 0;
+      }
+
+      while (p < mediaBytes.length) {
+        const tag = readPbVarint();
+        const fieldNum = tag >>> 3;
+        const wireType = tag & 7;
+        if (wireType === 2) {
+          const len = readPbVarint();
+          const end = Math.min(mediaBytes.length, p + len);
+          if (fieldNum === 1) {
+            let subP = p;
+            while (subP < end) {
+              const subTag = mediaBytes[subP++];
+              const subField = subTag >>> 3;
+              const subWire = subTag & 7;
+              if (subWire === 2) {
+                let sLen = 0;
+                let sShift = 0;
+                while (subP < end) {
+                  const sb = mediaBytes[subP++];
+                  sLen |= (sb & 0x7f) << sShift;
+                  if ((sb & 0x80) === 0) break;
+                  sShift += 7;
+                }
+                if (subField === 1 && subP + sLen <= end) {
+                  const fname = decoder.decode(mediaBytes.subarray(subP, subP + sLen));
+                  map[String(idx)] = fname;
+                }
+                subP += sLen;
+              } else if (subWire === 0) {
+                while (subP < end && (mediaBytes[subP++] & 0x80) !== 0) {}
+              } else {
+                break;
+              }
+            }
+            idx++;
+          }
+          p = end;
+        } else if (wireType === 0) {
+          readPbVarint();
+        } else {
+          break;
+        }
+      }
+      return map;
+    }
+
+    async function importApkgArchive(zipBytes, fallbackDeckName) {
+      setImportProgress(true, '正在解壓縮 APKG 封裝...', 20);
+      const entries = await extractZipEntries(zipBytes);
+
+      let dbEntry = entries.get('collection.anki21b') || entries.get('collection.anki21') || entries.get('collection.anki2');
+      if (!dbEntry) throw new Error('APKG 內找不到 Anki 資料庫檔案');
+
+      setImportProgress(true, '正在解壓 Anki 資料庫...', 40);
+      let rawDbBytes = await dbEntry.getBytes();
+      rawDbBytes = await decompressZstdSmart(rawDbBytes);
+
+      const sqlite = parseSqliteTables(rawDbBytes);
+
+      // Extract embedded media files (supports both JSON & Protobuf manifests)
+      setImportProgress(true, '正在還原內嵌圖片與音訊...', 58);
+      const mediaEntry = entries.get('media');
+      if (mediaEntry) {
+        try {
+          let mediaBytes = await mediaEntry.getBytes();
+          mediaBytes = await decompressZstdSmart(mediaBytes);
+          const mediaMap = parseMediaManifest(mediaBytes);
+          const mimeTable = {
+            jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+            gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+            mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4'
+          };
+          const batchBlobs = [];
+          for (const [numKey, origName] of Object.entries(mediaMap)) {
+            const fileItem = entries.get(numKey);
+            if (!fileItem || !origName) continue;
+            const ext = origName.split('.').pop().toLowerCase();
+            if (!mimeTable[ext]) continue;
+            const cleanBytes = await fileItem.getBytes();
+            const blob = new Blob([cleanBytes], { type: mimeTable[ext] });
+            sessionMediaBlobs[origName] = URL.createObjectURL(blob);
+            batchBlobs.push({ name: origName, blob });
+          }
+          if (batchBlobs.length > 0) {
+            await idbSaveMediaBlobsBatch(batchBlobs);
+          }
+        } catch (e) {
+          console.warn('Media manifest parse skipped:', e);
+        }
+      }
+
+      // Parse Decks from `col` JSON (legacy) AND `decks` table (Anki 2.1.50+)
+      setImportProgress(true, '正在建立牌組結構...', 74);
+      const deckIdMap = {};
+      const newlyImportedDecks = [];
+      let firstImportedDeckId = null;
+
+      const registerImportedDeck = (origDid, rawName, totalCount) => {
+        if (!rawName) return;
+        const cleanName = String(rawName).replace(/\x1f/g, '::').trim();
+        if (cleanName === 'Default' && totalCount > 1) return;
+        if (deckIdMap[origDid]) return;
+        const newDid = `deck_${Date.now()}_${origDid}`;
+        deckIdMap[origDid] = newDid;
+        if (!firstImportedDeckId) firstImportedDeckId = newDid;
+        const deckObj = {
+          id: newDid,
+          name: cleanName === 'Default' ? fallbackDeckName : cleanName,
+          createdAt: Date.now()
+        };
+        appState.decks.push(deckObj);
+        newlyImportedDecks.push(deckObj);
+      };
+
+      const colRows = sqlite.readTable('col');
+      if (colRows.length > 0) {
+        const decksJsonStr = colRows[0].cols.find(v => typeof v === 'string' && v.includes('"name"') && v.trim().startsWith('{'));
+        if (decksJsonStr) {
+          try {
+            const rawDecks = JSON.parse(decksJsonStr);
+            const entriesArr = Object.entries(rawDecks);
+            entriesArr.forEach(([origDid, info]) => {
+              if (info && info.name) registerImportedDeck(origDid, info.name, entriesArr.length);
+            });
+          } catch (e) {}
+        }
+      }
+
+      const decksTableRows = sqlite.readTable('decks');
+      if (decksTableRows.length > 0) {
+        decksTableRows.forEach(r => {
+          const origDid = String(r.cols[0] ?? r.rowid);
+          const deckName = typeof r.cols[1] === 'string' ? r.cols[1] : '';
+          registerImportedDeck(origDid, deckName, decksTableRows.length);
+        });
+      }
+
+      if (!firstImportedDeckId) {
+        firstImportedDeckId = `deck_${Date.now()}`;
+        const fallbackObj = { id: firstImportedDeckId, name: fallbackDeckName, createdAt: Date.now() };
+        appState.decks.push(fallbackObj);
+        newlyImportedDecks.push(fallbackObj);
+      }
+
+      // Map note id -> deck id via `cards` table
+      const noteToDeck = {};
+      const cardRows = sqlite.readTable('cards');
+      cardRows.forEach(r => {
+        const nid = String(r.cols[1]);
+        const did = String(r.cols[2]);
+        if (nid && deckIdMap[did]) noteToDeck[nid] = deckIdMap[did];
+      });
+
+      // Parse Notes from `notes` table
+      setImportProgress(true, '正在匯入單字卡片...', 86);
+      const noteRows = sqlite.readTable('notes');
+      const importedCards = [];
+
+      noteRows.forEach((r, idx) => {
+        const nid = String(r.cols[0] ?? r.rowid);
+        const fldsStr = (typeof r.cols[6] === 'string' && r.cols[6].includes('\x1f'))
+          ? r.cols[6]
+          : (r.cols.find(v => typeof v === 'string' && v.includes('\x1f')) || '');
+        const fields = String(fldsStr).split('\x1f');
+        const rawFront = (fields[0] || '').trim();
+        const rawBack = (fields.slice(1).join('<br>') || '').trim();
+
+        const plainFront = stripHtmlTags(rawFront).trim();
+        if (!plainFront || plainFront.includes('Please update to the latest Anki version')) return;
+
+        const soundMatch = (rawFront + ' ' + rawBack).match(/\[sound:([^\]]+)\]/i);
+        const imgMatch = (rawFront + ' ' + rawBack).match(/<img[^>]+src=["']([^"']+)["']/i);
+        const mediaAudioName = soundMatch ? soundMatch[1] : null;
+        const mediaImageName = imgMatch ? imgMatch[1] : null;
+
+        importedCards.push({
+          id: `anki_${Date.now()}_${idx}`,
+          deckId: noteToDeck[nid] || firstImportedDeckId,
+          front: plainFront,
+          phonetic: '',
+          pos: '',
+          back: stripHtmlTags(rawBack) || '(無釋義)',
+          backHtml: rawBack.replace(/\[sound:[^\]]+\]/gi, ''),
+          mediaAudioName,
+          mediaImageName,
+          embeddedAudio: mediaAudioName ? sessionMediaBlobs[mediaAudioName] : null,
+          embeddedImage: mediaImageName ? sessionMediaBlobs[mediaImageName] : null,
+          note: '',
+          due: 0,
+          interval: 0,
+          ease: 2.5,
+          reps: 0
+        });
+      });
+
+      if (importedCards.length === 0) {
+        throw new Error('未能讀取到有效單字卡片，請確認檔案是否為包含卡片內容的 Anki 牌組');
+      }
+
+      appState.cards.push(...importedCards);
+      appState.activeDeckId = firstImportedDeckId;
+      studyQueueMode = 'due';
+      freeBrowseCursor = 0;
+
+      setImportProgress(true, '正在將牌組與卡片同步至雲端帳號...', 95);
+      await syncDecksAndCardsBatchToCloud(newlyImportedDecks, importedCards);
+      renderDeckTree();
+      switchWorkspaceMode('study');
+      loadCardIntoStage(false);
+      showToast(`成功匯入 ${importedCards.length.toLocaleString()} 張 Anki 卡片並儲存至雲端！`, 'success');
+    }
+
+    function resolveMediaReferencesInHtml(html) {
+      return String(html || '').replace(/src=["']([^"']+)["']/gi, (match, src) => {
+        if (sessionMediaBlobs[src]) return `src="${sessionMediaBlobs[src]}"`;
+        return match;
+      });
+    }
+// ... existing code ... -->
